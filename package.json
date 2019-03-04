@@ -6,21 +6,22 @@
 	"engines": {
 		"vscode": "^1.31.0"
 	},
+	"publisher": "Akshaal",
 	"categories": [
-		"Other"
+		"Snippets"
+	],
+	"keywords": [
+		"template",
+		"local",
+		"inline",
+		"macro",
+		"snippets"
 	],
 	"activationEvents": [
-		"onCommand:extension.helloWorld"
+		"*"
 	],
 	"main": "./out/extension.js",
-	"contributes": {
-		"commands": [
-			{
-				"command": "extension.helloWorld",
-				"title": "Hello World"
-			}
-		]
-	},
+	"contributes": {},
 	"scripts": {
 		"vscode:prepublish": "npm run compile",
 		"compile": "tsc -p ./",
@@ -33,6 +34,7 @@
 		"vscode": "^1.1.28",
 		"tslint": "^5.12.1",
 		"@types/node": "^10.12.21",
-		"@types/mocha": "^2.2.42"
+		"@types/mocha": "^2.2.42",
+		"vsce": "^1.57.1"
 	}
 }

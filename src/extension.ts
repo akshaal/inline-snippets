@@ -1,27 +1,50 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
-import * as vscode from 'vscode';
+import { ProviderResult, CompletionItem, CompletionItemKind, window, SnippetString } from 'vscode';
+import { TextDocument, ExtensionContext, languages, CompletionItemProvider } from 'vscode';
 
-// this method is called when your extension is activated
+function createCompletionItem(name: string, body: string): CompletionItem {
+	const item = new CompletionItem(name, CompletionItemKind.Snippet);
+	item.insertText = new SnippetString(body);
+	return item;
+}
+
+class CompletionItemProviderImpl implements CompletionItemProvider {
+	provideCompletionItems(document: TextDocument): ProviderResult<CompletionItem[]> {
+		const text = document.getText();
+
+		// This thing is stateful, we don't want it to be global...
+		const snippetRegex: RegExp = /<snippet:([a-zA+Z0-9]+)>(.*?)<\/snippet:([a-zA+Z0-9]+)>/g;
+
+		const matches: RegExpMatchArray | null = text.match(snippetRegex);
+
+		if (matches) {
+			const result: CompletionItem[] = [];
+
+			let m: RegExpExecArray | null;
+			while ((m = snippetRegex.exec(text))) {
+				const [, startName, body, stopName] = m;
+
+				if (startName !== stopName) {
+					window.showErrorMessage(`Local snippet: start tag != stop tag: ${startName} != ${stopName}`);
+					return [];
+				}
+
+				result.push(createCompletionItem(startName, body));
+			}
+
+			return result;
+		} else {
+			return [];
+		}
+	}
+}
+
 // your extension is activated the very first time the command is executed
-export function activate(context: vscode.ExtensionContext) {
+export function activate(context: ExtensionContext) {
+	const impl = new CompletionItemProviderImpl();
 
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
-	// This line of code will only be executed once when your extension is activated
-		console.log('Congratulations, your extension "inline-snippets" is now active!');
-
-	// The command has been defined in the package.json file
-	// Now provide the implementation of the command with registerCommand
-	// The commandId parameter must match the command field in package.json
-	let disposable = vscode.commands.registerCommand('extension.helloWorld', () => {
-		// The code you place here will be executed every time your command is executed
-
-		// Display a message box to the user
-		vscode.window.showInformationMessage('Hello World!');
-	});
-
-	context.subscriptions.push(disposable);
+	context.subscriptions.push(languages.registerCompletionItemProvider({ scheme: "untitled" }, impl));
+	context.subscriptions.push(languages.registerCompletionItemProvider({ scheme: "file" }, impl));
 }
 
 // this method is called when your extension is deactivated
-export function deactivate() {}
+export function deactivate() { }
