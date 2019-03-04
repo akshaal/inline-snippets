@@ -1,0 +1,8 @@
+#!/bin/sh
+
+cd $(dirname "$0")
+
+rm -f *.vsix
+yes | ./node_modules/.bin/vsce package
+
+code  --install-extension  ./*.vsix
