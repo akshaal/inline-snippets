@@ -12,7 +12,7 @@ class CompletionItemProviderImpl implements CompletionItemProvider {
 		const text = document.getText();
 
 		// This thing is stateful, we don't want it to be global...
-		const snippetRegex: RegExp = /<snippet:([a-zA+Z0-9]+)>(.*?)<\/snippet:([a-zA+Z0-9]+)>/g;
+		const snippetRegex: RegExp = /<snippet:([a-zA+Z0-9-]+)>(.*?)<\/snippet:([a-zA+Z0-9]+)>/g;
 
 		const matches: RegExpMatchArray | null = text.match(snippetRegex);
 
