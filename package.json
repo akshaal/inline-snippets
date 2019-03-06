@@ -36,5 +36,8 @@
 		"@types/node": "^10.12.21",
 		"@types/mocha": "^2.2.42",
 		"vsce": "^1.57.1"
+	},
+	"dependencies": {
+		"chevrotain": "^4.2.0"
 	}
 }
