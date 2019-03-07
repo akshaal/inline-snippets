@@ -1,43 +1,44 @@
 {
-	"name": "inline-snippets",
-	"displayName": "Inline Snippets",
-	"description": "File-local snippets",
-	"version": "0.0.1",
-	"engines": {
-		"vscode": "^1.31.0"
-	},
-	"publisher": "Akshaal",
-	"categories": [
-		"Snippets"
-	],
-	"keywords": [
-		"template",
-		"local",
-		"inline",
-		"macro",
-		"snippets"
-	],
-	"activationEvents": [
-		"*"
-	],
-	"main": "./out/extension.js",
-	"contributes": {},
-	"scripts": {
-		"vscode:prepublish": "npm run compile",
-		"compile": "tsc -p ./",
-		"watch": "tsc -watch -p ./",
-		"postinstall": "node ./node_modules/vscode/bin/install",
-		"test": "npm run compile && node ./node_modules/vscode/bin/test"
-	},
-	"devDependencies": {
-		"typescript": "^3.3.1",
-		"vscode": "^1.1.28",
-		"tslint": "^5.12.1",
-		"@types/node": "^10.12.21",
-		"@types/mocha": "^2.2.42",
-		"vsce": "^1.57.1"
-	},
-	"dependencies": {
-		"chevrotain": "^4.2.0"
-	}
+    "name": "inline-snippets",
+    "displayName": "Inline Snippets",
+    "description": "File-local snippets",
+    "version": "0.0.1",
+    "engines": {
+        "vscode": "^1.31.0"
+    },
+    "publisher": "Akshaal",
+    "categories": [
+        "Snippets"
+    ],
+    "keywords": [
+        "template",
+        "local",
+        "inline",
+        "macro",
+        "snippets"
+    ],
+    "activationEvents": [
+        "*"
+    ],
+    "main": "./out/extension.js",
+    "contributes": {},
+    "scripts": {
+        "vscode:prepublish": "npm run compile",
+        "compile": "tsc -p ./",
+        "watch": "tsc -watch -p ./",
+        "postinstall": "node ./node_modules/vscode/bin/install",
+        "test": "npm run compile && node ./node_modules/vscode/bin/test"
+    },
+    "devDependencies": {
+        "typescript": "^3.3.1",
+        "vscode": "^1.1.28",
+        "tslint": "^5.12.1",
+        "@types/node": "^10.12.21",
+        "@types/mocha": "^2.2.42",
+        "vsce": "^1.57.1",
+        "mocha": "^6.0.2",
+        "ts-node": "^8.0.3"
+    },
+    "dependencies": {
+    }
 }

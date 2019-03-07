@@ -9,7 +9,7 @@ class TestParser extends Parser {
     }
 
 	protected onMatchingTags(startMatch: RegExpExecArray, endMatch: RegExpExecArray): void {
-        this.parsed += `(${startMatch[1]}, ${endMatch[2]})`;
+        this.parsed += `(${startMatch[0]}, ${endMatch[0]})`;
     }
 }
 
@@ -53,7 +53,7 @@ suite("Parser Tests", function () {
     test("Test 7", function () {
         const parser = new TestParser();
         parser.parse("</snippet:xx></snippet:xx>");
-        assert.equal(parser.parsed, "[</snippet:yy>][</snippet:yy>]");
+        assert.equal(parser.parsed, "[</snippet:xx>][</snippet:xx>]");
     });
 
     test("Test 8", function () {
@@ -66,5 +66,11 @@ suite("Parser Tests", function () {
         const parser = new TestParser();
         parser.parse("<snippet:xx><snippet:xx></snippet:xx></snippet:xx>");
         assert.equal(parser.parsed, "[<snippet:xx>](<snippet:xx>, </snippet:xx>)[</snippet:xx>]");
+    });
+
+    test("Test 10", function () {
+        const parser = new TestParser();
+        parser.parse("<snippet:xx><snippet:xx></snippet:xx></snippet:xx2>");
+        assert.equal(parser.parsed, "[<snippet:xx>](<snippet:xx>, </snippet:xx>)[</snippet:xx2>]");
     });
 });

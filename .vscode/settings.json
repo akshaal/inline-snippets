@@ -10,5 +10,6 @@
     "typescript.tsc.autoDetect": "off",
     "cSpell.words": [
         "vsce"
-    ]
+    ],
+    "mochaExplorer.optsFile": "src/test/mocha.opts"
 }
