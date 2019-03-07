@@ -1,9 +1,15 @@
-import { ProviderResult, CompletionItem, CompletionItemKind, window, SnippetString } from 'vscode';
+import { ProviderResult, CompletionItem, CompletionItemKind, window, SnippetString, DecorationOptions, workspace, TextEditor, Range } from 'vscode';
 import { TextDocument, ExtensionContext, languages, CompletionItemProvider } from 'vscode';
 import { Parser } from './parser';
 
+const tagDecorationType = window.createTextEditorDecorationType({
+	cursor: 'crosshair',
+
+	backgroundColor: "green" // TODO: use { id: 'inlineSnippets.blahblahblahBackground' } See https://github.com/Microsoft/vscode-extension-samples/blob/master/decorator-sample/src/extension.ts
+});
+
 class CompletionCollectingParser extends Parser {
-	completions: CompletionItem[] = [];
+	readonly completions: CompletionItem[] = [];
 
 	protected onWrongTag(tagMatch: RegExpExecArray): void {
 	}
@@ -22,6 +28,31 @@ class CompletionCollectingParser extends Parser {
 	}
 }
 
+class DecoratingParser extends Parser {
+	readonly tagParts: DecorationOptions[] = [];
+
+	constructor(private activeEditor: TextEditor) {
+		super();
+	}
+
+	private newDecorationOptions(tagMatch: RegExpExecArray): DecorationOptions {
+		const startPos = this.activeEditor.document.positionAt(tagMatch.index);
+		const endPos = this.activeEditor.document.positionAt(tagMatch.index + tagMatch[0].length);
+
+		return {
+			range: new Range(startPos, endPos)
+		};
+	}
+
+	protected onWrongTag(tagMatch: RegExpExecArray): void {
+	}
+
+	protected onMatchingTags(text: string, startMatch: RegExpExecArray, endMatch: RegExpExecArray): void {
+		this.tagParts.push(this.newDecorationOptions(startMatch));
+		this.tagParts.push(this.newDecorationOptions(endMatch));
+	}
+}
+
 class CompletionItemProviderImpl implements CompletionItemProvider {
 	provideCompletionItems(document: TextDocument): ProviderResult<CompletionItem[]> {
 		const parser = new CompletionCollectingParser();
@@ -30,12 +61,50 @@ class CompletionItemProviderImpl implements CompletionItemProvider {
 	}
 }
 
+
 // your extension is activated the very first time the command is executed
 export function activate(context: ExtensionContext) {
-	const impl = new CompletionItemProviderImpl();
+	// Completions - - - - - - - - -  -
+	const completionProviderImpl = new CompletionItemProviderImpl();
 
-	context.subscriptions.push(languages.registerCompletionItemProvider({ scheme: "untitled" }, impl));
-	context.subscriptions.push(languages.registerCompletionItemProvider({ scheme: "file" }, impl));
+	context.subscriptions.push(languages.registerCompletionItemProvider({ scheme: "untitled" }, completionProviderImpl));
+	context.subscriptions.push(languages.registerCompletionItemProvider({ scheme: "file" }, completionProviderImpl));
+
+	// Decoration - - - - - - - - -  -
+	let activeEditor = window.activeTextEditor;
+
+	function updateDecorations() {
+		if (!activeEditor) {
+			return;
+		}
+
+		const parser = new DecoratingParser(activeEditor);
+		parser.parse(activeEditor.document.getText());
+
+		activeEditor.setDecorations(tagDecorationType, parser.tagParts);
+	}
+
+	let timeout: NodeJS.Timer | undefined = undefined;
+	function triggerUpdateDecorations() {
+		if (timeout) {
+			clearTimeout(timeout);
+			timeout = undefined;
+		}
+		timeout = setTimeout(updateDecorations, 500);
+	}
+
+	window.onDidChangeActiveTextEditor(editor => {
+		activeEditor = editor;
+		if (editor) {
+			triggerUpdateDecorations();
+		}
+	}, null, context.subscriptions);
+
+	workspace.onDidChangeTextDocument(event => {
+		if (activeEditor && event.document === activeEditor.document) {
+			triggerUpdateDecorations();
+		}
+	}, null, context.subscriptions);
 }
 
 // this method is called when your extension is deactivated
