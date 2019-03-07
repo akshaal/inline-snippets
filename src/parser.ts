@@ -1,13 +1,13 @@
 export abstract class Parser {
 	protected abstract onWrongTag(tagMatch: RegExpExecArray): void;
-	protected abstract onMatchingTags(startMatch: RegExpExecArray, endMatch: RegExpExecArray): void;
+	protected abstract onMatchingTags(text: string, startMatch: RegExpExecArray, endMatch: RegExpExecArray): void;
 
-	private onUnknownTagPair(startMatch: RegExpExecArray, endMatch: RegExpExecArray): void {
+	private onUnknownTagPair(text: string, startMatch: RegExpExecArray, endMatch: RegExpExecArray): void {
 		const startName = startMatch[1];
 		const endName = endMatch[1];
 
 		if (startName === endName) {
-			this.onMatchingTags(startMatch, endMatch);
+			this.onMatchingTags(text, startMatch, endMatch);
 		} else {
 			this.onWrongTag(startMatch);
 			this.onWrongTag(endMatch);
@@ -60,7 +60,7 @@ export abstract class Parser {
 				}
 			}
 
-			this.onUnknownTagPair(startMatch, endMatch);
+			this.onUnknownTagPair(text, startMatch, endMatch);
 
 			if (nextStartMatch) {
 				// There is a next start and it is after end

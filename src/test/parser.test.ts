@@ -8,7 +8,7 @@ class TestParser extends Parser {
         this.parsed += `[${tagMatch[0]}]`;
     }
 
-	protected onMatchingTags(startMatch: RegExpExecArray, endMatch: RegExpExecArray): void {
+	protected onMatchingTags(text: string, startMatch: RegExpExecArray, endMatch: RegExpExecArray): void {
         this.parsed += `(${startMatch[0]}, ${endMatch[0]})`;
     }
 }

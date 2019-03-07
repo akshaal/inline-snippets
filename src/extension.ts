@@ -2,21 +2,23 @@ import { ProviderResult, CompletionItem, CompletionItemKind, window, SnippetStri
 import { TextDocument, ExtensionContext, languages, CompletionItemProvider } from 'vscode';
 import { Parser } from './parser';
 
-function createCompletionItem(name: string, body: string): CompletionItem {
-	const item = new CompletionItem(name, CompletionItemKind.Snippet);
-	item.insertText = new SnippetString(body);
-	return item;
-}
-
 class CompletionCollectingParser extends Parser {
 	completions: CompletionItem[] = [];
 
 	protected onWrongTag(tagMatch: RegExpExecArray): void {
-
 	}
 
-	protected onMatchingTags(startMatch: RegExpExecArray, endMatch: RegExpExecArray): void {
+	protected onMatchingTags(text: string, startMatch: RegExpExecArray, endMatch: RegExpExecArray): void {
+		const name = startMatch[1];
+		const bodyStart = startMatch[0].length + startMatch.index;
+		const body = text.substr(bodyStart, endMatch.index - bodyStart);
 
+		const item = new CompletionItem(name, CompletionItemKind.Snippet);
+		item.insertText = new SnippetString(body);
+		item.documentation = body;
+		item.detail = "File-local snippet";
+
+		this.completions.push(item);
 	}
 }
 
