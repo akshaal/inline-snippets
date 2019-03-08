@@ -3,17 +3,21 @@ import { TextDocument, ExtensionContext, languages, CompletionItemProvider } fro
 import { Parser } from './parser';
 
 const tagDecorationType = window.createTextEditorDecorationType({
-	color: { id: "inlineSnippets.tagForegroundColor" }
+	color: { id: "inlineSnippets.tagColor" }
+});
+
+const tagNameDecorationType = window.createTextEditorDecorationType({
+	color: { id: "inlineSnippets.tagNameColor" }
 });
 
 const errorDecorationType = window.createTextEditorDecorationType({
-	color: { id: "inlineSnippets.errorForegroundColor" }
+	color: { id: "inlineSnippets.errorColor" }
 });
 
 class CompletionCollectingParser extends Parser {
 	readonly completions: CompletionItem[] = [];
 
-	protected onWrongTag(tagMatch: RegExpExecArray): void {
+	protected onWrongTag(_tagMatch: RegExpExecArray): void {
 	}
 
 	protected onMatchingTags(text: string, startMatch: RegExpExecArray, endMatch: RegExpExecArray): void {
@@ -32,28 +36,44 @@ class CompletionCollectingParser extends Parser {
 
 class DecoratingParser extends Parser {
 	readonly tagParts: DecorationOptions[] = [];
+	readonly tagNameParts: DecorationOptions[] = [];
 	readonly errorParts: DecorationOptions[] = [];
 
 	constructor(private activeEditor: TextEditor) {
 		super();
 	}
 
-	private newDecorationOptions(tagMatch: RegExpExecArray): DecorationOptions {
+	private pushDecorationOptions(tagMatch: RegExpExecArray, isError: boolean): void {
 		const startPos = this.activeEditor.document.positionAt(tagMatch.index);
-		const endPos = this.activeEditor.document.positionAt(tagMatch.index + tagMatch[0].length);
+		const endIdx = tagMatch.index + tagMatch[0].length;
+		const endPos = this.activeEditor.document.positionAt(endIdx);
 
-		return {
-			range: new Range(startPos, endPos)
-		};
+		if (isError) {
+			this.errorParts.push({
+				range: new Range(startPos, endPos)
+			});
+		} else {
+			const nameEndPos = this.activeEditor.document.positionAt(endIdx - 1);
+			const nameStartPos = this.activeEditor.document.positionAt(endIdx - 1 - tagMatch[1].length);
+
+			this.tagParts.push(
+				{ range: new Range(startPos, nameStartPos) },
+				{ range: new Range(nameEndPos, endPos) }
+			);
+
+			this.tagNameParts.push(
+				{ range: new Range(nameStartPos, nameEndPos) },
+			);
+		}
 	}
 
 	protected onWrongTag(tagMatch: RegExpExecArray): void {
-		this.errorParts.push(this.newDecorationOptions(tagMatch));
+		this.pushDecorationOptions(tagMatch, true);
 	}
 
-	protected onMatchingTags(text: string, startMatch: RegExpExecArray, endMatch: RegExpExecArray): void {
-		this.tagParts.push(this.newDecorationOptions(startMatch));
-		this.tagParts.push(this.newDecorationOptions(endMatch));
+	protected onMatchingTags(_text: string, startMatch: RegExpExecArray, endMatch: RegExpExecArray): void {
+		this.pushDecorationOptions(startMatch, false);
+		this.pushDecorationOptions(endMatch, false);
 	}
 }
 
@@ -86,6 +106,7 @@ export function activate(context: ExtensionContext) {
 		parser.parse(activeEditor.document.getText());
 
 		activeEditor.setDecorations(tagDecorationType, parser.tagParts);
+		activeEditor.setDecorations(tagNameDecorationType, parser.tagNameParts);
 		activeEditor.setDecorations(errorDecorationType, parser.errorParts);
 	}
 

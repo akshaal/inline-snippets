@@ -24,21 +24,30 @@
     "contributes": {
         "colors": [
             {
-                "id": "inlineSnippets.tagForegroundColor",
-                "description": "Foreground color for file-local snippet definition tags",
+                "id": "inlineSnippets.tagColor",
+                "description": "Color of file-local snippet definition tags",
                 "defaults": {
-                    "dark": "#EE0",
+                    "dark": "#BB0",
                     "light": "#330",
                     "highContrast": "editor.foreground"
                 }
             },
             {
-                "id": "inlineSnippets.errorForegroundColor",
+                "id": "inlineSnippets.tagNameColor",
+                "description": "Color for tag name of file-local snippet definitions",
+                "defaults": {
+                    "dark": "#DD0",
+                    "light": "#220",
+                    "highContrast": "editor.foreground"
+                }
+            },
+            {
+                "id": "inlineSnippets.errorColor",
                 "description": "Foreground color for error in a file-local snippet definition",
                 "defaults": {
                     "dark": "#F00",
-                    "light": "#F00",
-                    "highContrast": "#f00"
+                    "light": "#500",
+                    "highContrast": "editor.foreground"
                 }
             }
         ]
