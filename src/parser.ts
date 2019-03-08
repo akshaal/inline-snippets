@@ -15,8 +15,8 @@ export abstract class Parser {
 	}
 
 	parse(text: string): void {
-		const snippetStartRegex: RegExp = /<snippet:([a-zA+Z0-9-]+)>/g;
-		const snippetEndRegex: RegExp = /<\/snippet:([a-zA+Z0-9-]+)>/g;
+		const snippetStartRegex: RegExp = /<snippet:([!#%&/()=?`'|\\*+a-zA+Z0-9-]+)>/g;
+		const snippetEndRegex: RegExp = /<\/snippet:([!#%&/()=?`'|\\*+a-zA+Z0-9-]+)>/g;
 
 		let startMatch: RegExpExecArray | null = snippetStartRegex.exec(text);
 		

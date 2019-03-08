@@ -21,7 +21,28 @@
         "*"
     ],
     "main": "./out/extension.js",
-    "contributes": {},
+    "contributes": {
+        "colors": [
+            {
+                "id": "inlineSnippets.tagForegroundColor",
+                "description": "Foreground color for file-local snippet definition tags",
+                "defaults": {
+                    "dark": "#EE0",
+                    "light": "#330",
+                    "highContrast": "editor.foreground"
+                }
+            },
+            {
+                "id": "inlineSnippets.errorForegroundColor",
+                "description": "Foreground color for error in a file-local snippet definition",
+                "defaults": {
+                    "dark": "#F00",
+                    "light": "#F00",
+                    "highContrast": "#f00"
+                }
+            }
+        ]
+    },
     "scripts": {
         "vscode:prepublish": "npm run compile",
         "compile": "tsc -p ./",
@@ -39,6 +60,5 @@
         "mocha": "^6.0.2",
         "ts-node": "^8.0.3"
     },
-    "dependencies": {
-    }
+    "dependencies": {}
 }

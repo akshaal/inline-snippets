@@ -2,10 +2,16 @@ import { ProviderResult, CompletionItem, CompletionItemKind, window, SnippetStri
 import { TextDocument, ExtensionContext, languages, CompletionItemProvider } from 'vscode';
 import { Parser } from './parser';
 
-const tagDecorationType = window.createTextEditorDecorationType({
-	cursor: 'crosshair',
+// Inline tests :)
+// <snippet:xxx>test</snippet:xxx>
 
-	backgroundColor: "green" // TODO: use { id: 'inlineSnippets.blahblahblahBackground' } See https://github.com/Microsoft/vscode-extension-samples/blob/master/decorator-sample/src/extension.ts
+
+const tagDecorationType = window.createTextEditorDecorationType({
+	color: { id: "inlineSnippets.tagForegroundColor" }
+});
+
+const errorDecorationType = window.createTextEditorDecorationType({
+	color: { id: "inlineSnippets.errorForegroundColor" }
 });
 
 class CompletionCollectingParser extends Parser {
@@ -30,6 +36,7 @@ class CompletionCollectingParser extends Parser {
 
 class DecoratingParser extends Parser {
 	readonly tagParts: DecorationOptions[] = [];
+	readonly errorParts: DecorationOptions[] = [];
 
 	constructor(private activeEditor: TextEditor) {
 		super();
@@ -45,6 +52,7 @@ class DecoratingParser extends Parser {
 	}
 
 	protected onWrongTag(tagMatch: RegExpExecArray): void {
+		this.errorParts.push(this.newDecorationOptions(tagMatch));
 	}
 
 	protected onMatchingTags(text: string, startMatch: RegExpExecArray, endMatch: RegExpExecArray): void {
@@ -82,6 +90,7 @@ export function activate(context: ExtensionContext) {
 		parser.parse(activeEditor.document.getText());
 
 		activeEditor.setDecorations(tagDecorationType, parser.tagParts);
+		activeEditor.setDecorations(errorDecorationType, parser.errorParts);
 	}
 
 	let timeout: NodeJS.Timer | undefined = undefined;
@@ -90,13 +99,13 @@ export function activate(context: ExtensionContext) {
 			clearTimeout(timeout);
 			timeout = undefined;
 		}
-		timeout = setTimeout(updateDecorations, 500);
+		timeout = setTimeout(updateDecorations, 100);
 	}
 
 	window.onDidChangeActiveTextEditor(editor => {
 		activeEditor = editor;
 		if (editor) {
-			triggerUpdateDecorations();
+			updateDecorations();
 		}
 	}, null, context.subscriptions);
 
