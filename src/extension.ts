@@ -2,10 +2,6 @@ import { ProviderResult, CompletionItem, CompletionItemKind, window, SnippetStri
 import { TextDocument, ExtensionContext, languages, CompletionItemProvider } from 'vscode';
 import { Parser } from './parser';
 
-// Inline tests :)
-// <snippet:xxx>test</snippet:xxx>
-
-
 const tagDecorationType = window.createTextEditorDecorationType({
 	color: { id: "inlineSnippets.tagForegroundColor" }
 });
