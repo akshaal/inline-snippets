@@ -1,4 +1,4 @@
-import { ProviderResult, CompletionItem, CompletionItemKind, window, SnippetString, DecorationOptions, workspace, TextEditor, Range } from 'vscode';
+import { ProviderResult, CompletionItem, CompletionItemKind, window, SnippetString, DecorationOptions, workspace, TextEditor, Range, Position, MarkdownString } from 'vscode';
 import { TextDocument, ExtensionContext, languages, CompletionItemProvider } from 'vscode';
 import { Parser } from './parser';
 
@@ -14,17 +14,49 @@ const errorDecorationType = window.createTextEditorDecorationType({
 	color: { id: "inlineSnippets.errorColor" }
 });
 
-class CompletionCollectingParser extends Parser {
+const snippetCompletionItem = new CompletionItem("snippet", CompletionItemKind.Snippet);
+snippetCompletionItem.insertText = new SnippetString("snippet:$1>$2</snippet:$1>$0");
+snippetCompletionItem.detail = "File-local snippet";
+snippetCompletionItem.documentation = new MarkdownString("Inserts a new snippet definition that is only visible inside the current file");
+
+class CompletionCollectingParser extends Parser<"in-tag" | "in-body"> {
 	readonly completions: CompletionItem[] = [];
 
-	protected onWrongTag(_tagMatch: RegExpExecArray): void {
+	constructor(private offset: number) {
+		super();
 	}
 
-	protected onMatchingTags(text: string, startMatch: RegExpExecArray, endMatch: RegExpExecArray): void {
-		const name = startMatch[1];
-		const bodyStart = startMatch[0].length + startMatch.index;
-		const body = text.substr(bodyStart, endMatch.index - bodyStart);
+	protected onWrongTag(tagMatch: RegExpExecArray): void | "in-tag" {
+		const offset = this.offset;
+		const tagStartIdx = tagMatch.index;
+		const tagEndIdx = tagMatch[0].length + tagMatch.index;
 
+		if (offset > tagStartIdx && offset < tagEndIdx) {
+			return;
+		}
+	}
+
+	protected onMatchingTags(text: string, startMatch: RegExpExecArray, endMatch: RegExpExecArray): void | "in-tag" | "in-body" {
+		const offset = this.offset;
+		const startTagStartIdx = startMatch.index;
+		const bodyStartIdx = startTagStartIdx + startMatch[0].length;
+		const bodyEndIdx = endMatch.index;
+
+		if (offset >= bodyStartIdx && offset <= bodyEndIdx) {
+			return "in-body";
+		}
+
+		if (offset > startTagStartIdx && offset < bodyStartIdx) {
+			return "in-tag";
+		}
+
+		if (offset > bodyEndIdx && offset < bodyEndIdx + endMatch[0].length) {
+			return "in-tag";
+		}
+
+		const body = text.substr(bodyStartIdx, bodyEndIdx - bodyStartIdx);
+
+		const name = startMatch[1];
 		const item = new CompletionItem(name, CompletionItemKind.Snippet);
 		item.insertText = new SnippetString(body);
 		item.documentation = body;
@@ -34,7 +66,7 @@ class CompletionCollectingParser extends Parser {
 	}
 }
 
-class DecoratingParser extends Parser {
+class DecoratingParser extends Parser<string> {
 	readonly tagParts: DecorationOptions[] = [];
 	readonly tagNameParts: DecorationOptions[] = [];
 	readonly errorParts: DecorationOptions[] = [];
@@ -78,10 +110,26 @@ class DecoratingParser extends Parser {
 }
 
 class CompletionItemProviderImpl implements CompletionItemProvider {
-	provideCompletionItems(document: TextDocument): ProviderResult<CompletionItem[]> {
-		const parser = new CompletionCollectingParser();
-		parser.parse(document.getText());
-		return parser.completions;
+	provideCompletionItems(document: TextDocument, position: Position): ProviderResult<CompletionItem[]> {
+		const range = document.getWordRangeAtPosition(position);
+		const prefixCol = (range ? range.start : position).character - 1;
+		const prefix = prefixCol >= 0 ? document.lineAt(position).text[prefixCol] : '';
+
+		const offset = document.offsetAt(position);
+		const parser = new CompletionCollectingParser(offset);
+
+		const rc = parser.parse(document.getText());
+		if (rc === "in-body") {
+			return [];
+		} else if (rc === "in-tag") {
+			return [];
+		} else {
+			if (prefix === '<') {
+				parser.completions.push(snippetCompletionItem);
+			}
+
+			return parser.completions;
+		}
 	}
 }
 

@@ -1,25 +1,31 @@
-export abstract class Parser {
-	protected abstract onWrongTag(tagMatch: RegExpExecArray): void;
-	protected abstract onMatchingTags(text: string, startMatch: RegExpExecArray, endMatch: RegExpExecArray): void;
+export abstract class Parser<T extends string> {
+	protected abstract onWrongTag(tagMatch: RegExpExecArray): void | T;
+	protected abstract onMatchingTags(text: string, startMatch: RegExpExecArray, endMatch: RegExpExecArray): void | T;
 
-	private onUnknownTagPair(text: string, startMatch: RegExpExecArray, endMatch: RegExpExecArray): void {
+	private onUnknownTagPair(text: string, startMatch: RegExpExecArray, endMatch: RegExpExecArray): void | T {
 		const startName = startMatch[1];
 		const endName = endMatch[1];
 
 		if (startName === endName) {
-			this.onMatchingTags(text, startMatch, endMatch);
+			return this.onMatchingTags(text, startMatch, endMatch);
 		} else {
-			this.onWrongTag(startMatch);
-			this.onWrongTag(endMatch);
+			const rc = this.onWrongTag(startMatch);
+			if (typeof rc === "string") {
+				return rc;
+			}
+
+			return this.onWrongTag(endMatch);
 		}
 	}
 
-	parse(text: string): void {
-		const snippetStartRegex: RegExp = /<snippet:([!#%&/()=?`'|\\*+a-zA+Z0-9-]+)>/g;
-		const snippetEndRegex: RegExp = /<\/snippet:([!#%&/()=?`'|\\*+a-zA+Z0-9-]+)>/g;
+	parse(text: string): void | T {
+		const snippetStartRegex: RegExp = /<snippet:([!#%&/=?`'|\\*+]{0,1}[a-zA+Z0-9]+)>/g;
+		const snippetEndRegex: RegExp = /<\/snippet:([!#%&/=?`'|\\*+]{0,1}[a-zA+Z0-9]+)>/g;
 
 		let startMatch: RegExpExecArray | null = snippetStartRegex.exec(text);
-		
+
+		let rc: T | void;
+
 		while (true) {
 			let endMatch: RegExpExecArray | null;
 
@@ -29,7 +35,9 @@ export abstract class Parser {
 				if (endMatch) {
 					if (!startMatch || startMatch.index > endMatch.index) {
 						// There is no start or start is after end, it means wrong end
-						this.onWrongTag(endMatch);
+						if (typeof (rc = this.onWrongTag(endMatch)) === "string") {
+							return rc;
+						}
 					} else {
 						// There is start and it's before end
 						break;
@@ -38,7 +46,9 @@ export abstract class Parser {
 					if (startMatch) {
 						// There no end, but there is start... just consume all starts and return
 						do {
-							this.onWrongTag(startMatch);
+							if (typeof (rc = this.onWrongTag(startMatch)) === "string") {
+								return rc;
+							}
 						} while ((startMatch = snippetStartRegex.exec(text)));
 					}
 
@@ -50,17 +60,21 @@ export abstract class Parser {
 			// There is a start and it's before the end
 			// What about next start?
 			let nextStartMatch: RegExpExecArray | null;
-			
+
 			while ((nextStartMatch = snippetStartRegex.exec(text))) {
 				if (nextStartMatch.index < endMatch.index) {
-					this.onWrongTag(startMatch);
+					if (typeof (rc = this.onWrongTag(startMatch)) === "string") {
+						return rc;
+					}
 					startMatch = nextStartMatch;
 				} else {
 					break;
 				}
 			}
 
-			this.onUnknownTagPair(text, startMatch, endMatch);
+			if (typeof (rc = this.onUnknownTagPair(text, startMatch, endMatch)) === "string") {
+				return rc;
+			}
 
 			if (nextStartMatch) {
 				// There is a next start and it is after end
@@ -70,7 +84,9 @@ export abstract class Parser {
 				// How about more end tags?
 				// Because there is no start, we can just mark all of them as wrong ones
 				while ((endMatch = snippetEndRegex.exec(text))) {
-					this.onWrongTag(endMatch);
+					if (typeof (rc = this.onWrongTag(endMatch)) === "string") {
+						return rc;
+					}
 				}
 
 				return;

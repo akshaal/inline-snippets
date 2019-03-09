@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import { Parser } from '../parser';
 
-class TestParser extends Parser {
+class TestParser extends Parser<string> {
     parsed: string = "";
 
     protected onWrongTag(tagMatch: RegExpExecArray): void {
