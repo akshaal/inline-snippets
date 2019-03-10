@@ -1,6 +1,11 @@
-import { ProviderResult, CompletionItem, CompletionItemKind, window, SnippetString, DecorationOptions, workspace, TextEditor, Range, Position, MarkdownString } from 'vscode';
+import { ProviderResult, CompletionItem, CompletionItemKind, window, SnippetString, DecorationOptions, workspace, TextEditor, Range, Position, MarkdownString, DocumentSelector, RenameProvider, WorkspaceEdit } from 'vscode';
 import { TextDocument, ExtensionContext, languages, CompletionItemProvider } from 'vscode';
 import { Parser } from './parser';
+
+const documentSelectors: DocumentSelector[] = [
+	{ scheme: "untitled" },
+	{ scheme: "file" }
+];
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -210,8 +215,105 @@ class CompletionItemProviderImpl implements CompletionItemProvider {
 function activateCompletion(context: ExtensionContext) {
 	const completionProviderImpl = new CompletionItemProviderImpl();
 
-	context.subscriptions.push(languages.registerCompletionItemProvider({ scheme: "untitled" }, completionProviderImpl));
-	context.subscriptions.push(languages.registerCompletionItemProvider({ scheme: "file" }, completionProviderImpl));
+	for (const documentSelector of documentSelectors) {
+		context.subscriptions.push(languages.registerCompletionItemProvider(documentSelector, completionProviderImpl));
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// RENAME PROVIDER
+
+class RenameMatchingParser extends Parser<"done"> {
+	positionRenameRange: Range | undefined;
+	matchRenameRange: Range | undefined;
+
+	constructor(private offset: number, private document: TextDocument) {
+		super();
+	}
+
+	protected onWrongTag(tagMatch: RegExpExecArray): void | "done" {
+		const offset = this.offset;
+		const tagStartIdx = tagMatch.index;
+		const tagEndIdx = tagMatch[0].length + tagMatch.index;
+
+		if (offset >= tagStartIdx && offset < tagEndIdx) {
+			return "done";
+		}
+	}
+	
+	protected onMatchingTags(text: string, startMatch: RegExpExecArray, endMatch: RegExpExecArray): void | "done" {
+		const offset = this.offset;
+		const startTagStartIdx = startMatch.index;
+		const bodyStartIdx = startTagStartIdx + startMatch[0].length;
+		const bodyEndIdx = endMatch.index;
+
+		if (offset >= bodyStartIdx && offset <= bodyEndIdx) {
+			return "done";
+		}
+
+		const endIdx = bodyEndIdx + endMatch[0].length;
+
+		const makeRanges = (): [Range, Range] => {
+			const name = startMatch[1];
+
+			return [
+				new Range(
+					this.document.positionAt(bodyStartIdx - name.length - 1),
+					this.document.positionAt(bodyStartIdx - 1)
+				),
+
+				new Range(
+					this.document.positionAt(endIdx - name.length - 1),
+					this.document.positionAt(endIdx - 1)
+				)
+			];
+		};
+
+		if (offset >= startTagStartIdx && offset < bodyStartIdx) {
+			[this.positionRenameRange, this.matchRenameRange] = makeRanges();
+			return "done";
+		}
+ 
+		if (offset >= bodyEndIdx && offset < endIdx) {
+			[this.matchRenameRange, this.positionRenameRange] = makeRanges();
+			return "done";
+		}
+	}
+}
+
+class RenameProviderImpl implements RenameProvider {
+	prepareRename?(document: TextDocument, position: Position): Range | undefined {
+		const offset = document.offsetAt(position);
+		const parser = new RenameMatchingParser(offset, document);
+
+		parser.parse(document.getText());
+
+		return parser.positionRenameRange;
+	}
+
+	provideRenameEdits(document: TextDocument, position: Position, newName: string): WorkspaceEdit | undefined {
+		const offset = document.offsetAt(position);
+		const parser = new RenameMatchingParser(offset, document);
+
+		parser.parse(document.getText());
+
+		if (parser.matchRenameRange && parser.positionRenameRange) {
+			const we = new WorkspaceEdit();
+			we.replace(document.uri, parser.matchRenameRange, newName);
+			we.replace(document.uri, parser.positionRenameRange, newName);
+			return we;
+		}
+
+		return undefined;
+	}
+}
+
+function activateRename(context: ExtensionContext) {
+	const renameProviderImpl = new RenameProviderImpl();
+
+	for (const documentSelector of documentSelectors) {
+		context.subscriptions.push(languages.registerRenameProvider(documentSelector, renameProviderImpl));
+	}
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -221,6 +323,7 @@ function activateCompletion(context: ExtensionContext) {
 export function activate(context: ExtensionContext) {
 	activateCompletion(context);
 	activateDecoration(context);
+	activateRename(context);
 }
 
 // this method is called when your extension is deactivated
