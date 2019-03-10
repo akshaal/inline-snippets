@@ -2,6 +2,10 @@ import { ProviderResult, CompletionItem, CompletionItemKind, window, SnippetStri
 import { TextDocument, ExtensionContext, languages, CompletionItemProvider } from 'vscode';
 import { Parser } from './parser';
 
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// DECORATION
+
 const tagDecorationType = window.createTextEditorDecorationType({
 	color: { id: "inlineSnippets.tagColor" }
 });
@@ -14,57 +18,6 @@ const errorDecorationType = window.createTextEditorDecorationType({
 	color: { id: "inlineSnippets.errorColor" }
 });
 
-const snippetCompletionItem = new CompletionItem("snippet", CompletionItemKind.Snippet);
-snippetCompletionItem.insertText = new SnippetString("snippet:$1>$2</snippet:$1>$0");
-snippetCompletionItem.detail = "File-local snippet";
-snippetCompletionItem.documentation = new MarkdownString("Inserts a new snippet definition that is only visible inside the current file");
-
-class CompletionCollectingParser extends Parser<"in-tag" | "in-body"> {
-	readonly completions: CompletionItem[] = [];
-
-	constructor(private offset: number) {
-		super();
-	}
-
-	protected onWrongTag(tagMatch: RegExpExecArray): void | "in-tag" {
-		const offset = this.offset;
-		const tagStartIdx = tagMatch.index;
-		const tagEndIdx = tagMatch[0].length + tagMatch.index;
-
-		if (offset > tagStartIdx && offset < tagEndIdx) {
-			return;
-		}
-	}
-
-	protected onMatchingTags(text: string, startMatch: RegExpExecArray, endMatch: RegExpExecArray): void | "in-tag" | "in-body" {
-		const offset = this.offset;
-		const startTagStartIdx = startMatch.index;
-		const bodyStartIdx = startTagStartIdx + startMatch[0].length;
-		const bodyEndIdx = endMatch.index;
-
-		if (offset >= bodyStartIdx && offset <= bodyEndIdx) {
-			return "in-body";
-		}
-
-		if (offset > startTagStartIdx && offset < bodyStartIdx) {
-			return "in-tag";
-		}
-
-		if (offset > bodyEndIdx && offset < bodyEndIdx + endMatch[0].length) {
-			return "in-tag";
-		}
-
-		const body = text.substr(bodyStartIdx, bodyEndIdx - bodyStartIdx);
-
-		const name = startMatch[1];
-		const item = new CompletionItem(name, CompletionItemKind.Snippet);
-		item.insertText = new SnippetString(body);
-		item.documentation = body;
-		item.detail = "File-local snippet";
-
-		this.completions.push(item);
-	}
-}
 
 class DecoratingParser extends Parser<string> {
 	readonly tagParts: DecorationOptions[] = [];
@@ -109,40 +62,7 @@ class DecoratingParser extends Parser<string> {
 	}
 }
 
-class CompletionItemProviderImpl implements CompletionItemProvider {
-	provideCompletionItems(document: TextDocument, position: Position): ProviderResult<CompletionItem[]> {
-		const range = document.getWordRangeAtPosition(position);
-		const prefixCol = (range ? range.start : position).character - 1;
-		const prefix = prefixCol >= 0 ? document.lineAt(position).text[prefixCol] : '';
-
-		const offset = document.offsetAt(position);
-		const parser = new CompletionCollectingParser(offset);
-
-		const rc = parser.parse(document.getText());
-		if (rc === "in-body") {
-			return [];
-		} else if (rc === "in-tag") {
-			return [];
-		} else {
-			if (prefix === '<') {
-				parser.completions.push(snippetCompletionItem);
-			}
-
-			return parser.completions;
-		}
-	}
-}
-
-
-// your extension is activated the very first time the command is executed
-export function activate(context: ExtensionContext) {
-	// Completions - - - - - - - - -  -
-	const completionProviderImpl = new CompletionItemProviderImpl();
-
-	context.subscriptions.push(languages.registerCompletionItemProvider({ scheme: "untitled" }, completionProviderImpl));
-	context.subscriptions.push(languages.registerCompletionItemProvider({ scheme: "file" }, completionProviderImpl));
-
-	// Decoration - - - - - - - - -  -
+function activateDecoration(context: ExtensionContext) {
 	let activeEditor = window.activeTextEditor;
 
 	function updateDecorations() {
@@ -179,6 +99,128 @@ export function activate(context: ExtensionContext) {
 			triggerUpdateDecorations();
 		}
 	}, null, context.subscriptions);
+
+	triggerUpdateDecorations();
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// COMPLETION
+
+const snippetCompletionItem = new CompletionItem("snippet", CompletionItemKind.Snippet);
+snippetCompletionItem.insertText = new SnippetString("snippet:$1>$2</snippet:$1>$0");
+snippetCompletionItem.detail = "File-local snippet";
+snippetCompletionItem.documentation = new MarkdownString("Inserts a new snippet definition that is only visible inside the current file");
+
+class CompletionCollectingParser extends Parser<"in-tag" | "in-body"> {
+	readonly completions: CompletionItem[] = [];
+
+	constructor(private offset: number, private prefix: string, private prefixedWordRange: Range | undefined) {
+		super();
+	}
+
+	protected onWrongTag(tagMatch: RegExpExecArray): void | "in-tag" {
+		const offset = this.offset;
+		const tagStartIdx = tagMatch.index;
+		const tagEndIdx = tagMatch[0].length + tagMatch.index;
+
+		if (offset > tagStartIdx && offset < tagEndIdx) {
+			return;
+		}
+	}
+
+	protected onMatchingTags(text: string, startMatch: RegExpExecArray, endMatch: RegExpExecArray): void | "in-tag" | "in-body" {
+		const offset = this.offset;
+		const startTagStartIdx = startMatch.index;
+		const bodyStartIdx = startTagStartIdx + startMatch[0].length;
+		const bodyEndIdx = endMatch.index;
+
+		if (offset >= bodyStartIdx && offset <= bodyEndIdx) {
+			return "in-body";
+		}
+
+		if (offset > startTagStartIdx && offset < bodyStartIdx) {
+			return "in-tag";
+		}
+
+		if (offset > bodyEndIdx && offset < bodyEndIdx + endMatch[0].length) {
+			return "in-tag";
+		}
+
+		const name = startMatch[1];
+		const prefixed = this.isPrefixedName(name);
+
+		let completionRange: Range | undefined = undefined;
+
+		if (prefixed) {
+			if (this.prefix !== name[0]) {
+				return;
+			}
+
+			completionRange = this.prefixedWordRange;
+		}
+
+		const body = text.substr(bodyStartIdx, bodyEndIdx - bodyStartIdx);
+
+		const item = new CompletionItem(name, CompletionItemKind.Snippet);
+		item.insertText = new SnippetString(body);
+		item.documentation = body;
+		item.detail = "File-local snippet";
+		item.range = completionRange;
+
+		this.completions.push(item);
+	}
+}
+
+class CompletionItemProviderImpl implements CompletionItemProvider {
+	provideCompletionItems(document: TextDocument, position: Position): ProviderResult<CompletionItem[]> {
+		const range = document.getWordRangeAtPosition(position);
+		const prefixCol = (range ? range.start : position).character - 1;
+		const prefix = prefixCol >= 0 ? document.lineAt(position).text[prefixCol] : '';
+
+		let prefixedWordRange: Range | undefined;
+		if (prefix === '') {
+			prefixedWordRange = undefined;
+		} else {
+			if (range) {
+				prefixedWordRange = new Range(position.with(undefined, prefixCol), range.end);
+			} else {
+				prefixedWordRange = new Range(position.with(undefined, prefixCol), position);
+			}
+		}
+
+		const offset = document.offsetAt(position);
+		const parser = new CompletionCollectingParser(offset, prefix, prefixedWordRange);
+
+		const rc = parser.parse(document.getText());
+		if (rc === "in-body") {
+			return [];
+		} else if (rc === "in-tag") {
+			return [];
+		} else {
+			if (prefix === '<') {
+				parser.completions.push(snippetCompletionItem);
+			}
+
+			return parser.completions;
+		}
+	}
+}
+
+function activateCompletion(context: ExtensionContext) {
+	const completionProviderImpl = new CompletionItemProviderImpl();
+
+	context.subscriptions.push(languages.registerCompletionItemProvider({ scheme: "untitled" }, completionProviderImpl));
+	context.subscriptions.push(languages.registerCompletionItemProvider({ scheme: "file" }, completionProviderImpl));
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// MAIN CODE
+
+// your extension is activated the very first time the command is executed
+export function activate(context: ExtensionContext) {
+	activateCompletion(context);
+	activateDecoration(context);
 }
 
 // this method is called when your extension is deactivated

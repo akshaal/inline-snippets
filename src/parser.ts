@@ -1,3 +1,10 @@
+const prefixCharRegexStr = "[!#%&/=?`'|\\\\*+]";
+const nameRegexStr = prefixCharRegexStr + "{0,1}[a-zA+Z0-9]+";
+const snippetStartRegexStr = "<snippet:(" + nameRegexStr + ")>";
+const snippetEndRegexStr = "</snippet:(" + nameRegexStr + ")>";
+
+const prefixCharRegex = new RegExp("^" + prefixCharRegexStr + "{1}");
+
 export abstract class Parser<T extends string> {
 	protected abstract onWrongTag(tagMatch: RegExpExecArray): void | T;
 	protected abstract onMatchingTags(text: string, startMatch: RegExpExecArray, endMatch: RegExpExecArray): void | T;
@@ -18,9 +25,13 @@ export abstract class Parser<T extends string> {
 		}
 	}
 
-	parse(text: string): void | T {
-		const snippetStartRegex: RegExp = /<snippet:([!#%&/=?`'|\\*+]{0,1}[a-zA+Z0-9]+)>/g;
-		const snippetEndRegex: RegExp = /<\/snippet:([!#%&/=?`'|\\*+]{0,1}[a-zA+Z0-9]+)>/g;
+	protected isPrefixedName(name: string): boolean {
+		return !!name.match(prefixCharRegex);
+	}
+
+	public parse(text: string): void | T {
+		const snippetStartRegex: RegExp = new RegExp(snippetStartRegexStr, "g");
+		const snippetEndRegex: RegExp = new RegExp(snippetEndRegexStr, "g");
 
 		let startMatch: RegExpExecArray | null = snippetStartRegex.exec(text);
 
