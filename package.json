@@ -15,7 +15,8 @@
         "local",
         "inline",
         "macro",
-        "snippets"
+        "snippets",
+        "multi-root ready"
     ],
     "activationEvents": [
         "*"
