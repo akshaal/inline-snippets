@@ -23,6 +23,19 @@
     ],
     "main": "./out/extension.js",
     "contributes": {
+        "configuration": {
+            "title": "Inline Snippets",
+            "properties": {
+                "inlineSnippets.blacklistLanguageIds": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "scope": "resource"
+                }
+            }
+        },
+
         "colors": [
             {
                 "id": "inlineSnippets.tagColor",
