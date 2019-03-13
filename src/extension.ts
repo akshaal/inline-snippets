@@ -317,6 +317,17 @@ function activateRename(context: ExtensionContext) {
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// CONFIGURATION
+
+function activateConfiguration(context: ExtensionContext) {
+	context.subscriptions.push(
+		workspace.onDidChangeConfiguration(() => {
+			
+		})
+	);
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // MAIN CODE
 
 // your extension is activated the very first time the command is executed
@@ -324,6 +335,7 @@ export function activate(context: ExtensionContext) {
 	activateCompletion(context);
 	activateDecoration(context);
 	activateRename(context);
+	activateConfiguration(context);
 }
 
 // this method is called when your extension is deactivated
