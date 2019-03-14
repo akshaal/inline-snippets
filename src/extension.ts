@@ -1,4 +1,4 @@
-import { ProviderResult, CompletionItem, CompletionItemKind, window, SnippetString, DecorationOptions, workspace, TextEditor, Range, Position, MarkdownString, DocumentSelector, RenameProvider, WorkspaceEdit } from 'vscode';
+import { ProviderResult, CompletionItem, CompletionItemKind, window, SnippetString, DecorationOptions, workspace, TextEditor, Range, Position, MarkdownString, DocumentSelector, RenameProvider, WorkspaceEdit, ConfigurationTarget } from 'vscode';
 import { TextDocument, ExtensionContext, languages, CompletionItemProvider } from 'vscode';
 import { Parser } from './parser';
 
@@ -6,6 +6,20 @@ const documentSelectors: DocumentSelector[] = [
 	{ scheme: "untitled" },
 	{ scheme: "file" }
 ];
+
+function isExtensionEnabled(doc: TextDocument): boolean {
+	const config = workspace.getConfiguration("inlineSnippets", doc.uri);
+	if (!config) {
+		return true;
+	}
+
+	if (!config.blacklistLanguageIds) {
+		return true;
+	}
+
+	const blacklistLanguageIds: string[] = config.blacklistLanguageIds;
+	return blacklistLanguageIds.indexOf(doc.languageId) < 0;
+}
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -68,44 +82,77 @@ class DecoratingParser extends Parser<string> {
 }
 
 function activateDecoration(context: ExtensionContext) {
-	let activeEditor = window.activeTextEditor;
+	let timeouts: { [id: string]: NodeJS.Timer } = {};
 
-	function updateDecorations() {
-		if (!activeEditor) {
-			return;
+	function updateEditorDecorations(editor: TextEditor, preparedParser?: DecoratingParser): DecoratingParser {
+		let parser: DecoratingParser;
+
+		if (preparedParser) {
+			parser = preparedParser;
+		} else {
+			parser = new DecoratingParser(editor);
+			if (isExtensionEnabled(editor.document)) {
+				parser.parse(editor.document.getText());
+			}
 		}
 
-		const parser = new DecoratingParser(activeEditor);
-		parser.parse(activeEditor.document.getText());
+		editor.setDecorations(tagDecorationType, parser.tagParts);
+		editor.setDecorations(tagNameDecorationType, parser.tagNameParts);
+		editor.setDecorations(errorDecorationType, parser.errorParts);
 
-		activeEditor.setDecorations(tagDecorationType, parser.tagParts);
-		activeEditor.setDecorations(tagNameDecorationType, parser.tagNameParts);
-		activeEditor.setDecorations(errorDecorationType, parser.errorParts);
+		return parser;
 	}
 
-	let timeout: NodeJS.Timer | undefined = undefined;
-	function triggerUpdateDecorations() {
+	function updateDocumentDecorations(doc: TextDocument) {
+		let parser: DecoratingParser | undefined;
+
+		for (const editor of window.visibleTextEditors) {
+			if (editor.document === doc) {
+				parser = updateEditorDecorations(editor, parser);
+			}
+		}
+	}
+
+	function triggerUpdateDecorations(doc: TextDocument) {
+		const uri = doc.uri.toString();
+		let timeout = timeouts[uri];
+
 		if (timeout) {
 			clearTimeout(timeout);
-			timeout = undefined;
 		}
-		timeout = setTimeout(updateDecorations, 100);
+
+		timeouts[uri] = setTimeout(
+			() => {
+				delete timeouts[uri];
+				updateDocumentDecorations(doc);
+			},
+			100
+		);
+	}
+
+	function updateVisibleEditors() {
+		for (const editor of window.visibleTextEditors) {
+			updateEditorDecorations(editor);
+		}
 	}
 
 	window.onDidChangeActiveTextEditor(editor => {
-		activeEditor = editor;
 		if (editor) {
-			updateDecorations();
+			updateEditorDecorations(editor);
 		}
 	}, null, context.subscriptions);
 
 	workspace.onDidChangeTextDocument(event => {
-		if (activeEditor && event.document === activeEditor.document) {
-			triggerUpdateDecorations();
+		if (isExtensionEnabled(event.document)) {
+			triggerUpdateDecorations(event.document);
 		}
 	}, null, context.subscriptions);
 
-	triggerUpdateDecorations();
+	workspace.onDidChangeConfiguration(() => {
+		updateVisibleEditors();
+	}, null, context.subscriptions);
+
+	updateVisibleEditors();
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -179,6 +226,10 @@ class CompletionCollectingParser extends Parser<"in-tag" | "in-body"> {
 
 class CompletionItemProviderImpl implements CompletionItemProvider {
 	provideCompletionItems(document: TextDocument, position: Position): ProviderResult<CompletionItem[]> {
+		if (!isExtensionEnabled(document)) {
+			return [];
+		}
+
 		const range = document.getWordRangeAtPosition(position);
 		const prefixCol = (range ? range.start : position).character - 1;
 		const prefix = prefixCol >= 0 ? document.lineAt(position).text[prefixCol] : '';
@@ -221,121 +272,12 @@ function activateCompletion(context: ExtensionContext) {
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// RENAME PROVIDER
-
-class RenameMatchingParser extends Parser<"done"> {
-	positionRenameRange: Range | undefined;
-	matchRenameRange: Range | undefined;
-
-	constructor(private offset: number, private document: TextDocument) {
-		super();
-	}
-
-	protected onWrongTag(tagMatch: RegExpExecArray): void | "done" {
-		const offset = this.offset;
-		const tagStartIdx = tagMatch.index;
-		const tagEndIdx = tagMatch[0].length + tagMatch.index;
-
-		if (offset >= tagStartIdx && offset < tagEndIdx) {
-			return "done";
-		}
-	}
-	
-	protected onMatchingTags(text: string, startMatch: RegExpExecArray, endMatch: RegExpExecArray): void | "done" {
-		const offset = this.offset;
-		const startTagStartIdx = startMatch.index;
-		const bodyStartIdx = startTagStartIdx + startMatch[0].length;
-		const bodyEndIdx = endMatch.index;
-
-		if (offset >= bodyStartIdx && offset <= bodyEndIdx) {
-			return "done";
-		}
-
-		const endIdx = bodyEndIdx + endMatch[0].length;
-
-		const makeRanges = (): [Range, Range] => {
-			const name = startMatch[1];
-
-			return [
-				new Range(
-					this.document.positionAt(bodyStartIdx - name.length - 1),
-					this.document.positionAt(bodyStartIdx - 1)
-				),
-
-				new Range(
-					this.document.positionAt(endIdx - name.length - 1),
-					this.document.positionAt(endIdx - 1)
-				)
-			];
-		};
-
-		if (offset >= startTagStartIdx && offset < bodyStartIdx) {
-			[this.positionRenameRange, this.matchRenameRange] = makeRanges();
-			return "done";
-		}
- 
-		if (offset >= bodyEndIdx && offset < endIdx) {
-			[this.matchRenameRange, this.positionRenameRange] = makeRanges();
-			return "done";
-		}
-	}
-}
-
-class RenameProviderImpl implements RenameProvider {
-	prepareRename?(document: TextDocument, position: Position): Range | undefined {
-		const offset = document.offsetAt(position);
-		const parser = new RenameMatchingParser(offset, document);
-
-		parser.parse(document.getText());
-
-		return parser.positionRenameRange;
-	}
-
-	provideRenameEdits(document: TextDocument, position: Position, newName: string): WorkspaceEdit | undefined {
-		const offset = document.offsetAt(position);
-		const parser = new RenameMatchingParser(offset, document);
-
-		parser.parse(document.getText());
-
-		if (parser.matchRenameRange && parser.positionRenameRange) {
-			const we = new WorkspaceEdit();
-			we.replace(document.uri, parser.matchRenameRange, newName);
-			we.replace(document.uri, parser.positionRenameRange, newName);
-			return we;
-		}
-
-		return undefined;
-	}
-}
-
-function activateRename(context: ExtensionContext) {
-	const renameProviderImpl = new RenameProviderImpl();
-
-	for (const documentSelector of documentSelectors) {
-		context.subscriptions.push(languages.registerRenameProvider(documentSelector, renameProviderImpl));
-	}
-}
-
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// CONFIGURATION
-
-function activateConfiguration(context: ExtensionContext) {
-	context.subscriptions.push(
-		workspace.onDidChangeConfiguration(() => {
-			
-		})
-	);
-}
-
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // MAIN CODE
 
 // your extension is activated the very first time the command is executed
 export function activate(context: ExtensionContext) {
 	activateCompletion(context);
 	activateDecoration(context);
-	activateRename(context);
-	activateConfiguration(context);
 }
 
 // this method is called when your extension is deactivated
