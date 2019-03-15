@@ -1,5 +1,5 @@
 const prefixCharRegexStr = "[!#%&/=?`'|\\\\*+]";
-const nameRegexStr = prefixCharRegexStr + "{0,1}[a-zA+Z0-9]+";
+const nameRegexStr = prefixCharRegexStr + "{0,1}[a-zA-Z0-9]+";
 const snippetStartRegexStr = "<snippet:(" + nameRegexStr + ")>";
 const snippetEndRegexStr = "</snippet:(" + nameRegexStr + ")>";
 
